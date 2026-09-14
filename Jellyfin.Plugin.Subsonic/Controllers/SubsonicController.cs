@@ -1268,17 +1268,56 @@ public class SubsonicController : ControllerBase
 
     // ── getStarred / getStarred2 ─────────────────────────────────────────────
 
+    // Jellyfin stores the favorite flag but not a "favorited at" timestamp.
+    // OpenSubsonic clients use the presence of the `starred`
+    // attribute itself to decide whether an item is a favorite. Use DateCreated
+    // as a stable compatibility timestamp rather than changing it on every sync.
+    private static string GetStarredCompatibilityTimestamp(BaseItem item)
+    {
+        var timestamp = item.DateCreated == default ? DateTime.UnixEpoch : item.DateCreated;
+        timestamp = timestamp.Kind switch
+        {
+            DateTimeKind.Utc => timestamp,
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc),
+            _ => timestamp.ToUniversalTime(),
+        };
+        return timestamp.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+    }
+
     private IActionResult GetStarred(User user, string format, bool v2)
     {
         var artists = _library.GetItemList(new InternalItemsQuery(user)
         { IncludeItemTypes = [BaseItemKind.MusicArtist], IsFavorite = true, Recursive = true })
-            .OfType<MusicArtist>().Select(a => new Dictionary<string, object?> { ["id"] = a.Id.ToString("N"), ["name"] = a.Name ?? "" }).ToList();
+            .OfType<MusicArtist>()
+            .Select(a => new Dictionary<string, object?>
+            {
+                ["id"] = a.Id.ToString("N"),
+                ["name"] = a.Name ?? "",
+                ["starred"] = GetStarredCompatibilityTimestamp(a),
+            })
+            .ToList();
+
         var albums = _library.GetItemList(new InternalItemsQuery(user)
         { IncludeItemTypes = [BaseItemKind.MusicAlbum], IsFavorite = true, Recursive = true })
-            .OfType<MusicAlbum>().Select(ToAlbumWithArtist).ToList();
+            .OfType<MusicAlbum>()
+            .Select(a =>
+            {
+                var mapped = ToAlbumWithArtist(a);
+                mapped["starred"] = GetStarredCompatibilityTimestamp(a);
+                return mapped;
+            })
+            .ToList();
+
         var songs = _library.GetItemList(new InternalItemsQuery(user)
         { IncludeItemTypes = [BaseItemKind.Audio], IsFavorite = true, Recursive = true })
-            .OfType<Audio>().Select(ToSongWithArtist).ToList();
+            .OfType<Audio>()
+            .Select(song =>
+            {
+                var mapped = ToSongWithArtist(song);
+                mapped["starred"] = GetStarredCompatibilityTimestamp(song);
+                return mapped;
+            })
+            .ToList();
 
         var json = SubsonicEnvelope.Ok(new()
         {
@@ -1286,7 +1325,6 @@ public class SubsonicController : ControllerBase
         });
         return Respond(format, json, XmlBuilder.Starred(artists, albums, songs, v2));
     }
-
     // ── getUser / getUsers ───────────────────────────────────────────────────
 
     private IActionResult GetUser(User user, string format)

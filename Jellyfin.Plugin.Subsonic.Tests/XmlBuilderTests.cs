@@ -185,4 +185,30 @@ public class XmlBuilderTests
         var exp = s.GetAttribute("expires");
         Assert.False(string.IsNullOrEmpty(exp), "expires must always be present");
     }
+    [Fact]
+    public void Starred2_PreservesStarredMarkerForClients()
+    {
+        const string marker = "2026-01-02T03:04:05.678Z";
+        var artists = new List<Dictionary<string, object?>>
+        {
+            new() { ["id"] = "artist-1", ["name"] = "Artist", ["starred"] = marker }
+        };
+        var albums = new List<Dictionary<string, object?>>
+        {
+            new() { ["id"] = "album-1", ["name"] = "Album", ["starred"] = marker }
+        };
+        var songs = new List<Dictionary<string, object?>>
+        {
+            new() { ["id"] = "song-1", ["title"] = "Song", ["isDir"] = false, ["starred"] = marker }
+        };
+
+        var xml = XmlBuilder.Starred(artists, albums, songs, true);
+        var doc = Parse(xml);
+        var root = doc.DocumentElement!;
+        var starred2 = root["starred2", "http://subsonic.org/restapi"]!;
+
+        Assert.Equal(marker, ((XmlElement)starred2.GetElementsByTagName("artist")[0]!).GetAttribute("starred"));
+        Assert.Equal(marker, ((XmlElement)starred2.GetElementsByTagName("album")[0]!).GetAttribute("starred"));
+        Assert.Equal(marker, ((XmlElement)starred2.GetElementsByTagName("song")[0]!).GetAttribute("starred"));
+    }
 }
