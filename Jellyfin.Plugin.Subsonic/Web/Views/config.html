@@ -19,6 +19,12 @@
             <div class="fieldDescription">Used for getArtistInfo/getAlbumInfo. Leave empty to keep existing key.</div>
           </div>
 
+          <div class="inputContainer">
+            <label class="inputLabel inputLabelUnfocused" for="externalBaseUrl">External Base URL</label>
+            <input id="externalBaseUrl" is="emby-input" type="text" class="emby-input" autocomplete="off" placeholder="https://example.com:4433/yyy" />
+            <div class="fieldDescription">Optional public URL used by Subfin when generating client-visible links. Set this when a reverse proxy strips a path prefix before forwarding to Jellyfin. Leave empty to auto-detect.</div>
+          </div>
+
           <div class="checkboxContainer checkboxContainer-withDescription">
             <label class="emby-checkbox-label">
               <input id="sharingEnabled" type="checkbox" />
@@ -49,6 +55,7 @@
             Dashboard.showLoadingMsg();
             ApiClient.getPluginConfiguration(pluginId).then(function (config) {
               document.getElementById('lastFmApiKeyStatus').textContent = config.LastFmApiKey ? 'API key is configured.' : 'No API key saved.';
+              document.getElementById('externalBaseUrl').value = config.ExternalBaseUrl || '';
               document.getElementById('sharingEnabled').checked = config.SharingEnabled !== false;
               document.getElementById('logRestRequests').checked = !!config.LogRestRequests;
               Dashboard.hideLoadingMsg();
@@ -60,6 +67,7 @@
               ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                 var newKey = document.getElementById('lastFmApiKey').value;
                 if (newKey) config.LastFmApiKey = newKey;
+                config.ExternalBaseUrl = document.getElementById('externalBaseUrl').value.trim();
                 config.SharingEnabled = document.getElementById('sharingEnabled').checked;
                 config.LogRestRequests = document.getElementById('logRestRequests').checked;
                 ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {

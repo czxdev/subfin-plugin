@@ -42,11 +42,35 @@ public class WebController : ControllerBase
         _logger = logger;
     }
 
-    private string GetPublicJellyfinBaseUrl() =>
-        _appHost.GetSmartApiUrl(Request).TrimEnd('/');
+    private static bool TryGetConfiguredExternalBaseUrl(out Uri? uri)
+    {
+        var configured = SubsonicPlugin.Instance?.Configuration?.ExternalBaseUrl?.Trim();
+        if (Uri.TryCreate(configured, UriKind.Absolute, out var parsed)
+            && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
+        {
+            uri = parsed;
+            return true;
+        }
 
-    private string GetJellyfinBasePath() =>
-        Request.PathBase.HasValue ? Request.PathBase.Value!.TrimEnd('/') : string.Empty;
+        uri = null;
+        return false;
+    }
+
+    private string GetPublicJellyfinBaseUrl()
+    {
+        if (TryGetConfiguredExternalBaseUrl(out var uri))
+            return uri!.GetLeftPart(UriPartial.Path).TrimEnd('/');
+
+        return _appHost.GetSmartApiUrl(Request).TrimEnd('/');
+    }
+
+    private string GetJellyfinBasePath()
+    {
+        if (TryGetConfiguredExternalBaseUrl(out var uri))
+            return uri!.AbsolutePath.TrimEnd('/');
+
+        return Request.PathBase.HasValue ? Request.PathBase.Value!.TrimEnd('/') : string.Empty;
+    }
 
     // ── Index ────────────────────────────────────────────────────────────────
 
