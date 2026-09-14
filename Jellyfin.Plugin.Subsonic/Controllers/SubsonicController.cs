@@ -682,31 +682,25 @@ public class SubsonicController : ControllerBase
     {
         var folderIds = GetEffectiveFolderIds(auth, p.MusicFolderId);
         var folderSuffix = folderIds == null ? "all" : string.Join(",", folderIds.OrderBy(x => x));
-        var cacheKey = $"genres:{auth.JellyfinUserId}:{folderSuffix}";
+        var cacheKey = $"genres-v2:{auth.JellyfinUserId}:{folderSuffix}";
         const long TtlMs = 30L * 60 * 1000;
 
         var cached = GetOrRefreshCache(
             cacheKey, TtlMs,
             build: () =>
             {
-                var genreResult = _library.GetGenres(new InternalItemsQuery(user));
-                return genreResult.Items.Select(g =>
-                {
-                    var name = g.Item1.Name ?? "";
-                    var songCount = _library.GetCount(new InternalItemsQuery(user)
-                    {
-                        Genres = new List<string> { name },
-                        IncludeItemTypes = [BaseItemKind.Audio],
-                        Recursive = true,
-                    });
-                    var albumCount = _library.GetCount(new InternalItemsQuery(user)
-                    {
-                        Genres = new List<string> { name },
-                        IncludeItemTypes = [BaseItemKind.MusicAlbum],
-                        Recursive = true,
-                    });
-                    return new GenreCacheEntry(name, songCount, albumCount);
-                }).ToList();
+                var genreQuery = new InternalItemsQuery(user);
+                ApplyFolderScoping(genreQuery, folderIds);
+
+                var genreResult = _library.GetMusicGenres(genreQuery);
+
+                return genreResult.Items
+                    .Where(g => !string.IsNullOrWhiteSpace(g.Item1.Name))
+                    .Select(g => new GenreCacheEntry(
+                        g.Item1.Name!,
+                        g.Item2.SongCount,
+                        g.Item2.AlbumCount))
+                    .ToList();
             },
             deserialize: json => JsonSerializer.Deserialize<List<GenreCacheEntry>>(json),
             serialize: v => JsonSerializer.Serialize(v));
