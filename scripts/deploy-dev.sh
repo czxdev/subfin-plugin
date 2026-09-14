@@ -15,7 +15,7 @@ PLUGIN_DIR="$LOCALENV/jellyfin-data/config/plugins/Subfin_${VERSION}.0"
 # 1. Build
 echo "[deploy] Building Release v${VERSION}..."
 dotnet publish -c Release "$REPO_ROOT/Jellyfin.Plugin.Subsonic" --nologo -v quiet
-PUBLISH="$REPO_ROOT/Jellyfin.Plugin.Subsonic/bin/Release/net9.0/publish"
+PUBLISH="$REPO_ROOT/Jellyfin.Plugin.Subsonic/bin/Release/net8.0/publish"
 
 # 2. Remove stale version dirs to avoid Jellyfin loading multiple versions
 for stale in "$LOCALENV/jellyfin-data/config/plugins/Subfin_"*/; do
