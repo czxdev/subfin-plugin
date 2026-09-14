@@ -12,6 +12,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Data.Entities;
 using Jellyfin.Plugin.Subsonic.Mappers;
 using Jellyfin.Plugin.Subsonic.Store;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
@@ -28,16 +29,24 @@ namespace Jellyfin.Plugin.Subsonic.Controllers;
 [Route("subfin")]
 public class WebController : ControllerBase
 {
+    private readonly IServerApplicationHost _appHost;
     private readonly IUserManager _userManager;
     private readonly ILibraryManager _library;
     private readonly ILogger<WebController> _logger;
 
-    public WebController(IUserManager userManager, ILibraryManager library, ILogger<WebController> logger)
+    public WebController(IServerApplicationHost appHost, IUserManager userManager, ILibraryManager library, ILogger<WebController> logger)
     {
+        _appHost = appHost;
         _userManager = userManager;
         _library = library;
         _logger = logger;
     }
+
+    private string GetPublicJellyfinBaseUrl() =>
+        _appHost.GetSmartApiUrl(Request).TrimEnd('/');
+
+    private string GetJellyfinBasePath() =>
+        Request.PathBase.HasValue ? Request.PathBase.Value!.TrimEnd('/') : string.Empty;
 
     // ── Index ────────────────────────────────────────────────────────────────
 
@@ -45,7 +54,8 @@ public class WebController : ControllerBase
     [HttpGet("index")]
     public IActionResult Index()
     {
-        var html = GetEmbeddedHtml("index.html");
+        var html = GetEmbeddedHtml("index.html")
+            .Replace("{{BASE_PATH}}", GetJellyfinBasePath());
         return Content(html, "text/html; charset=utf-8");
     }
 
@@ -69,7 +79,7 @@ public class WebController : ControllerBase
 
         SubsonicStore.IncrementShareVisitCount(uid);
 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = GetPublicJellyfinBaseUrl();
         var tracks = share.EntryIdsFlat.Select(id =>
         {
             if (!Guid.TryParse(id, out var guid)) return null;
@@ -85,6 +95,7 @@ public class WebController : ControllerBase
         var html = GetEmbeddedHtml("share.html")
             .Replace("{{SHARE_UID}}", uid)
             .Replace("{{SECRET}}", System.Net.WebUtility.HtmlEncode(secret))
+            .Replace("{{BASE_PATH}}", GetJellyfinBasePath())
             .Replace("{{TRACKS_JSON}}", tracksJson)
             .Replace("{{DESCRIPTION}}", System.Net.WebUtility.HtmlEncode(share.Description ?? "Shared Music"));
         return Content(html, "text/html; charset=utf-8");
@@ -205,7 +216,7 @@ public class WebController : ControllerBase
         var (user, err) = ResolveUser();
         if (user == null) return err!;
         var shares = SubsonicStore.GetSharesForUser(user.Username);
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = GetPublicJellyfinBaseUrl();
         return Ok(shares.Select(s => {
             var secret = SubsonicStore.GetShareSecret(s.ShareUid) ?? "";
             return new {
@@ -245,7 +256,7 @@ public class WebController : ControllerBase
         if (user == null) return err!;
         if (!user.Permissions.Any(p => p.Kind == PermissionKind.IsAdministrator && p.Value)) return Forbid();
         var shares = SubsonicStore.GetAllShares();
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = GetPublicJellyfinBaseUrl();
         return Ok(shares.Select(t => {
             var secret = SubsonicStore.GetShareSecret(t.Share.ShareUid) ?? "";
             return new {
@@ -312,7 +323,7 @@ public class WebController : ControllerBase
 
         var sb = new StringBuilder();
         sb.AppendLine("#EXTM3U");
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = GetPublicJellyfinBaseUrl();
         foreach (var id in share.EntryIdsFlat)
         {
             if (!Guid.TryParse(id, out var guid)) continue;

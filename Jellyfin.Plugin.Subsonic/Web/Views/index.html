@@ -128,13 +128,13 @@
       token = readStoredToken();
       if (!token) {
         // No local credentials — send to Jellyfin login
-        window.location.replace('/web/index.html#!/login.html');
+        window.location.replace('{{BASE_PATH}}/web/index.html#!/login.html');
         return;
       }
 
-      const r = await fetch('/subfin/api/me', { headers: authHeaders() });
+      const r = await fetch('{{BASE_PATH}}/subfin/api/me', { headers: authHeaders() });
       if (r.status === 401) {
-        window.location.replace('/web/index.html#!/login.html');
+        window.location.replace('{{BASE_PATH}}/web/index.html#!/login.html');
         return;
       }
       if (!r.ok) {
@@ -197,7 +197,7 @@
     async function linkDevice() {
       clearBanner();
       const label = document.getElementById('deviceLabel').value.trim();
-      const r = await fetch('/subfin/api/devices/link', {
+      const r = await fetch('{{BASE_PATH}}/subfin/api/devices/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ deviceLabel: label }),
@@ -213,7 +213,7 @@
     // ── Device list ───────────────────────────────────────────────────────────
 
     async function loadDevices() {
-      const r = await fetch('/subfin/api/devices', { headers: authHeaders() });
+      const r = await fetch('{{BASE_PATH}}/subfin/api/devices', { headers: authHeaders() });
       if (!r.ok) { showBanner('Could not load devices (' + r.status + ')', false); return; }
       const devices = await r.json();
 
@@ -239,7 +239,7 @@
 
     async function deleteDevice(id) {
       if (!confirm('Unlink this device? The Subsonic client using it will stop working.')) return;
-      const r = await fetch(`/subfin/api/devices/${id}`, { method: 'DELETE', headers: authHeaders() });
+      const r = await fetch(`{{BASE_PATH}}/subfin/api/devices/${id}`, { method: 'DELETE', headers: authHeaders() });
       if (!r.ok) { showBanner('Unlink failed (' + r.status + ')', false); return; }
       document.getElementById(`device-${id}`)?.remove();
       const list = document.getElementById('deviceList');
@@ -249,7 +249,7 @@
 
     async function resetPassword(id) {
       if (!confirm('Reset the password for this device? The Subsonic client will need to be reconfigured.')) return;
-      const r = await fetch(`/subfin/api/devices/${id}/reset-password`, { method: 'POST', headers: authHeaders() });
+      const r = await fetch(`{{BASE_PATH}}/subfin/api/devices/${id}/reset-password`, { method: 'POST', headers: authHeaders() });
       const d = await r.json();
       if (!r.ok) { showBanner('Reset failed (' + r.status + ')', false); return; }
 
@@ -287,7 +287,7 @@
 
     async function loadLibraries() {
       if (!currentUsername) return;
-      const r = await fetch(`/subfin/api/libraries?username=${encodeURIComponent(currentUsername)}`, { headers: authHeaders() });
+      const r = await fetch(`{{BASE_PATH}}/subfin/api/libraries?username=${encodeURIComponent(currentUsername)}`, { headers: authHeaders() });
       if (!r.ok) { document.getElementById('libraryCard').style.display = 'none'; return; }
       const data = await r.json();
       libraryFolders = data.folders;
@@ -304,7 +304,7 @@
       const selectedIds = libraryFolders
         .filter(f => document.getElementById(`lib-${f.id}`)?.checked)
         .map(f => f.id);
-      const r = await fetch('/subfin/api/libraries', {
+      const r = await fetch('{{BASE_PATH}}/subfin/api/libraries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ username: currentUsername, selectedIds }),
@@ -319,7 +319,7 @@
 
     async function loadShares(me) {
       // Detect admin by trying the admin endpoint
-      const adminR = await fetch('/subfin/api/admin/shares', { headers: authHeaders() });
+      const adminR = await fetch('{{BASE_PATH}}/subfin/api/admin/shares', { headers: authHeaders() });
       if (adminR.ok) {
         isAdmin = true;
         const all = await adminR.json();
@@ -327,7 +327,7 @@
         return;
       }
       // Fall back to own shares
-      const r = await fetch('/subfin/api/shares', { headers: authHeaders() });
+      const r = await fetch('{{BASE_PATH}}/subfin/api/shares', { headers: authHeaders() });
       if (!r.ok) return;
       const shares = await r.json();
       renderShares(shares, false);
@@ -348,8 +348,8 @@
         const created = s.created ? new Date(s.created).toLocaleDateString() : '—';
         const expires = s.expires ? new Date(s.expires).toLocaleDateString() : 'never';
         const meta = `${admin ? 'by ' + escHtml(s.username || '') + ' · ' : ''}created ${created} · expires ${expires} · ${s.visitCount ?? 0} visit${s.visitCount !== 1 ? 's' : ''}`;
-        const deleteEndpoint = admin ? `/subfin/api/admin/shares/${s.uid}` : `/subfin/api/shares/${s.uid}`;
-        const renameEndpoint = admin ? `/subfin/api/admin/shares/${s.uid}` : `/subfin/api/shares/${s.uid}`;
+        const deleteEndpoint = admin ? `{{BASE_PATH}}/subfin/api/admin/shares/${s.uid}` : `{{BASE_PATH}}/subfin/api/shares/${s.uid}`;
+        const renameEndpoint = admin ? `{{BASE_PATH}}/subfin/api/admin/shares/${s.uid}` : `{{BASE_PATH}}/subfin/api/shares/${s.uid}`;
         return `<div class="share-row" id="share-${escHtml(s.uid)}">
           <div class="share-info">
             <div class="share-desc" id="share-desc-${escHtml(s.uid)}">${escHtml(desc)}</div>
