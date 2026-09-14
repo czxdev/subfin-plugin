@@ -2,8 +2,16 @@ name: Release
 
 on:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*.*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Plugin version (e.g. 10.10.5.4)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -24,7 +32,12 @@ jobs:
 
       - name: Parse version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build
         run: dotnet publish -c Release Jellyfin.Plugin.Subsonic --nologo -v quiet
@@ -108,8 +121,16 @@ jobs:
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_OUTPUT"
           echo "CHECKSUM=$CHECKSUM" >> "$GITHUB_OUTPUT"
           echo "TIMESTAMP=$TIMESTAMP" >> "$GITHUB_OUTPUT"
+      
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jellyfin-plugin-subfin_${{ steps.version.outputs.VERSION }}
+          path: ${{ steps.package.outputs.ZIP_NAME }}
+          if-no-files-found: error
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           ZIP_NAME="${{ steps.package.outputs.ZIP_NAME }}"
@@ -123,6 +144,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update manifest
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           CHECKSUM="${{ steps.package.outputs.CHECKSUM }}"
@@ -170,6 +192,7 @@ jobs:
           echo "Manifest updated."
 
       - name: Commit updated manifest
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           git config user.name "github-actions[bot]"
