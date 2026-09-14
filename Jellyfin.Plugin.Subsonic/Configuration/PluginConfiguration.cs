@@ -21,6 +21,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool SharingEnabled { get; set; } = true;
 
     /// <summary>
+    /// Public URL used to access Subfin through a reverse proxy.
+    /// Example: https://example.com:4433/jellyfin
+    /// Leave empty to auto-detect from Jellyfin/request information.
+    /// </summary>
+    public string ExternalBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
     /// CORS origins allowed for /rest/* and /subfin/* (comma-separated).
     /// Leave empty to allow all origins (default for local dev).
     /// </summary>

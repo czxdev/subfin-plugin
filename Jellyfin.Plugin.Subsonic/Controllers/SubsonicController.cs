@@ -219,13 +219,25 @@ public class SubsonicController : ControllerBase
     private IActionResult ErrorResponse(string format, int code, string message) =>
         Respond(format, SubsonicEnvelope.Error(code, message), XmlBuilder.ErrorEnvelope(code, message));
 
-    // Client-visible URLs follow Jellyfin published/request-aware URL handling.
-    private string GetPublicJellyfinBaseUrl() =>
-        _appHost.GetSmartApiUrl(Request).TrimEnd('/');
+    // Client-visible URLs can be explicitly overridden when a reverse proxy strips
+    // an external path prefix before forwarding requests to Jellyfin.
+    private string GetPublicJellyfinBaseUrl()
+    {
+        var configured = SubsonicPlugin.Instance?.Configuration?.ExternalBaseUrl?.Trim();
+        if (Uri.TryCreate(configured, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        }
 
-    // Internal transcoding requests stay on Jellyfin local access while honoring BaseUrl.
+        return _appHost.GetSmartApiUrl(Request).TrimEnd('/');
+    }
+
+    // Internal transcoding must bypass the reverse proxy. Use Jellyfin's own
+    // HTTP port interface and force loopback; GetLocalApiUrl also preserves a
+    // real Jellyfin BaseUrl when one is configured.
     private string GetLocalJellyfinBaseUrl() =>
-        _appHost.GetApiUrlForLocalAccess(allowHttps: false).TrimEnd('/');
+        _appHost.GetLocalApiUrl("127.0.0.1", Uri.UriSchemeHttp, _appHost.HttpPort).TrimEnd('/');
 
     // ── getMusicFolders ──────────────────────────────────────────────────────
 
