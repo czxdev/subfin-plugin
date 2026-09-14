@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# probe-api.sh — Compile a C# snippet against Jellyfin 10.11.6 to verify API signatures.
+# probe-api.sh — Compile a C# snippet against Jellyfin 10.10.7 to verify API signatures.
 #
 # Usage:
 #   ./scripts/probe-api.sh
 #   # Edit /tmp/JellyfinProbe/Program.cs, then re-run
 #
-# The probe project auto-references Jellyfin.Controller, Jellyfin.Model, and
-# Jellyfin.Database.Implementations at the same versions used by the plugin.
+# The probe project auto-references Jellyfin.Controller and Jellyfin.Model
+# at the same versions used by the plugin.
 # Useful for checking method signatures, available properties, and namespace locations
 # without manually decompiling DLLs.
 #
@@ -28,13 +28,12 @@ cat > "$PROBE_DIR/JellyfinProbe.csproj" << 'EOF'
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.6" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.6" />
-    <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.6" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" />
+    <PackageReference Include="Jellyfin.Model" Version="10.10.7" />
   </ItemGroup>
 </Project>
 EOF

@@ -4,8 +4,8 @@ Exposes an [OpenSubsonic](https://opensubsonic.netlify.app/)-compatible REST API
 
 ## Requirements
 
-- Jellyfin **10.11.x** (built against 10.11.6)
-- .NET 9 runtime (included in Jellyfin 10.11.x)
+- Jellyfin **10.10.x** (built against 10.10.7)
+- .NET 8 runtime (included in Jellyfin 10.10.x)
 
 ## Installation
 
