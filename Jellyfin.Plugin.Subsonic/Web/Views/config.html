@@ -27,6 +27,14 @@
 
           <div class="checkboxContainer checkboxContainer-withDescription">
             <label class="emby-checkbox-label">
+              <input id="hideArtwork" type="checkbox" />
+              <span>Hide artwork</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">Hide server artwork in Subsonic clients. Clear previously cached artwork in your client and select Only server artworks to show its default icons.</div>
+          </div>
+
+          <div class="checkboxContainer checkboxContainer-withDescription">
+            <label class="emby-checkbox-label">
               <input id="sharingEnabled" type="checkbox" />
               <span>Enable sharing</span>
             </label>
@@ -57,6 +65,7 @@
               document.getElementById('lastFmApiKeyStatus').textContent = config.LastFmApiKey ? 'API key is configured.' : 'No API key saved.';
               document.getElementById('externalBaseUrl').value = config.ExternalBaseUrl || '';
               document.getElementById('sharingEnabled').checked = config.SharingEnabled !== false;
+              document.getElementById('hideArtwork').checked = !!config.HideArtwork;
               document.getElementById('logRestRequests').checked = !!config.LogRestRequests;
               Dashboard.hideLoadingMsg();
             });
@@ -69,6 +78,7 @@
                 if (newKey) config.LastFmApiKey = newKey;
                 config.ExternalBaseUrl = document.getElementById('externalBaseUrl').value.trim();
                 config.SharingEnabled = document.getElementById('sharingEnabled').checked;
+                config.HideArtwork = document.getElementById('hideArtwork').checked;
                 config.LogRestRequests = document.getElementById('logRestRequests').checked;
                 ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                   Dashboard.processPluginConfigurationUpdateResult(result);

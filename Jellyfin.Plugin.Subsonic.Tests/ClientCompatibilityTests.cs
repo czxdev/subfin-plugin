@@ -37,6 +37,31 @@ public class ClientCompatibilityTests
         Assert.Equal("Second line", lines[1]!.InnerText);
     }
 
+    [Fact]
+    public void HiddenArtwork_RemovesNestedImagesWithoutChangingSongsOrLyrics()
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse("""
+            {"album":{"id":"a","coverArt":"al-a","song":[{"id":"s","coverArt":"s"}]},
+             "artistInfo":{"smallImageUrl":"https://example.com/image"},"lyrics":{"value":"coverArt"}}
+            """)!;
+        ArtworkPolicy.RemoveArtwork(json);
+        Assert.Null(json["album"]!["coverArt"]);
+        Assert.Null(json["album"]!["song"]![0]!["coverArt"]);
+        Assert.Equal("s", json["album"]!["song"]![0]!["id"]!.GetValue<string>());
+        Assert.Equal("coverArt", json["lyrics"]!["value"]!.GetValue<string>());
+        Assert.Null(json["artistInfo"]!["smallImageUrl"]);
+
+        var doc = Parse(ArtworkPolicy.RemoveArtwork("""
+            <subsonic-response xmlns="http://subsonic.org/restapi"><album id="a" coverArt="al-a">
+            <song id="s" coverArt="s"/></album><artistInfo><largeImageUrl>https://example.com</largeImageUrl></artistInfo>
+            <lyrics><line start="0">君 &amp; me</line></lyrics></subsonic-response>
+            """));
+        Assert.Equal(0, doc.SelectNodes("//@coverArt")!.Count);
+        Assert.Equal(0, doc.GetElementsByTagName("largeImageUrl").Count);
+        Assert.Equal("君 & me", doc.GetElementsByTagName("line")[0]!.InnerText);
+        Assert.Equal(1, doc.GetElementsByTagName("song").Count);
+    }
+
     private static XmlDocument Parse(string xml)
     {
         var doc = new XmlDocument();

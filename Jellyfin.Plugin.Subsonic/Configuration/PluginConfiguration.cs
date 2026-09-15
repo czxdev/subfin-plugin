@@ -20,6 +20,8 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Enable the sharing feature (createShare, getShares, share pages). Disable to prevent users from creating or accessing shares.</summary>
     public bool SharingEnabled { get; set; } = true;
 
+    public bool HideArtwork { get; set; } = false;
+
     /// <summary>
     /// Public URL used to access Subfin through a reverse proxy.
     /// Example: https://example.com:4433/jellyfin

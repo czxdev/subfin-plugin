@@ -1,8 +1,40 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Linq;
+using System.Xml.Linq;
 
 namespace Jellyfin.Plugin.Subsonic.Response;
+
+internal static class ArtworkPolicy
+{
+    private static bool IsArtwork(string name) => name is
+        "coverArt" or "smallImageUrl" or "mediumImageUrl" or "largeImageUrl" or "artistImageUrl";
+
+    internal static void RemoveArtwork(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var key in obj.Select(entry => entry.Key).ToList())
+            {
+                if (IsArtwork(key)) obj.Remove(key);
+                else RemoveArtwork(obj[key]);
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (var child in array) RemoveArtwork(child);
+        }
+    }
+
+    internal static string RemoveArtwork(string xml)
+    {
+        var document = XDocument.Parse(xml);
+        document.Descendants().Attributes().Where(a => IsArtwork(a.Name.LocalName)).Remove();
+        document.Descendants().Where(e => IsArtwork(e.Name.LocalName)).Remove();
+        return document.ToString(SaveOptions.DisableFormatting);
+    }
+}
 
 /// <summary>Subsonic API protocol version advertised to clients.</summary>
 public static class SubsonicConstants
