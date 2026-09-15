@@ -1,6 +1,6 @@
 {
   "category": "Music",
-  "changelog": "Initial release",
+  "changelog": "Add configurable codec-based automatic audio transcoding, optional converted downloads, and accurate transcoded format metadata.",
   "description": "OpenSubsonic-to-Jellyfin compatibility layer. Use Subsonic/Navidrome clients (DSub, Substreamer, etc.) with your Jellyfin music library.",
   "guid": "4a3b2c1d-e5f6-7890-abcd-ef1234567890",
   "imageUrl": "https://home.kray.pw/jellyfin-plugin-subfin-logo.png",
@@ -9,5 +9,5 @@
   "owner": "williamkray",
   "targetAbi": "10.10.7.0",
   "timestamp": "2026-01-01T00:00:00Z",
-  "version": "10.10.5.5"
+  "version": "10.10.5.6"
 }

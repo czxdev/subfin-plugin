@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Linq;
 using Jellyfin.Data.Entities;
 using Jellyfin.Plugin.Subsonic.Controllers;
+using Jellyfin.Plugin.Subsonic.Auth;
+using Jellyfin.Plugin.Subsonic.Configuration;
 using Jellyfin.Plugin.Subsonic.Mappers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -59,12 +61,44 @@ public class ItemMapperTests
 
     private class TestAudio : Audio
     {
-        public override List<MediaBrowser.Model.Entities.MediaStream> GetMediaStreams() => new();
+        public string? Codec { get; set; }
+        public override List<MediaBrowser.Model.Entities.MediaStream> GetMediaStreams() => Codec == null ? new() :
+            new() { new() { Type = MediaBrowser.Model.Entities.MediaStreamType.Audio, Codec = Codec } };
         public override bool IsVisible(User user, bool skipAllowedTagsCheck = false) => true;
     }
 
     private static SubsonicController Controller(ILibraryManager library) =>
         new(null!, null!, library, null!, null!, null!, null!, null!, null!, null!, null!, null!);
+
+    [Theory]
+    [InlineData(true, false, true, null, "dsd_lsbf_planar")]
+    [InlineData(true, true, true, "raw", "dsd_lsbf_planar")]
+    [InlineData(false, false, false, null, "dsd_lsbf_planar")]
+    [InlineData(false, false, true, null, "aac")]
+    public async Task OriginalAudioPathsRemainAvailable(bool download, bool transcodeDownloads, bool enabled, string? format, string codec)
+    {
+        var song = new TestAudio { Id = Guid.NewGuid(), Path = "/music/song.dsf", Container = "dsf", Codec = codec };
+        var library = DispatchProxy.Create<ILibraryManager, ParentLibrary>();
+        ((ParentLibrary)library).Items = new() { [song.Id] = song };
+        var query = new Dictionary<string, StringValues> { ["id"] = song.Id.ToString("N") };
+        if (format != null) query["format"] = format;
+        var config = new PluginConfiguration { AutomaticTranscodingEnabled = enabled, TranscodeDownloads = transcodeDownloads };
+        var auth = new AuthResult("user", Guid.NewGuid().ToString("N"), null, null);
+        var result = Assert.IsType<PhysicalFileResult>(await Controller(library).ServeAudio(
+            auth, new QueryParams(new QueryCollection(query)), download, config));
+        Assert.Equal(song.Path, result.FileName);
+        Assert.True(result.EnableRangeProcessing);
+        Assert.Equal(download ? "song.dsf" : "", result.FileDownloadName);
+    }
+
+    [Fact]
+    public async Task DownloadCannotBypassShareAllowlist()
+    {
+        var auth = new AuthResult("share", Guid.NewGuid().ToString("N"), null, null, "share-id", new());
+        var query = new QueryParams(new QueryCollection(new Dictionary<string, StringValues> { ["id"] = Guid.NewGuid().ToString("N") }));
+        var result = await Controller(null!).ServeAudio(auth, query, true, new PluginConfiguration());
+        Assert.Equal(403, Assert.IsType<StatusCodeResult>(result).StatusCode);
+    }
 
     [Fact]
     public void GetAlbum_IncludesSongsInsideDiscFolders()

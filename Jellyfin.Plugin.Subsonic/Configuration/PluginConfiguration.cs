@@ -22,6 +22,18 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public bool HideArtwork { get; set; } = false;
 
+    public bool AutomaticTranscodingEnabled { get; set; } = false;
+
+    public string SupportedAudioCodecs { get; set; } = "aac,mp3,flac,alac,vorbis,opus,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le";
+
+    public string AutomaticTranscodingFormat { get; set; } = "mp3";
+
+    public int TranscodingBitRate { get; set; } = 192;
+
+    public int TranscodingSampleRate { get; set; } = 48000;
+
+    public bool TranscodeDownloads { get; set; } = false;
+
     /// <summary>
     /// Public URL used to access Subfin through a reverse proxy.
     /// Example: https://example.com:4433/jellyfin

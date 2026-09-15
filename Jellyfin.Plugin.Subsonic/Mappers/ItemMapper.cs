@@ -4,6 +4,7 @@ using System.Linq;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using Jellyfin.Plugin.Subsonic.Transcoding;
 
 namespace Jellyfin.Plugin.Subsonic.Mappers;
 
@@ -129,6 +130,8 @@ public static class ItemMapper
 
         var suffix = song.Container?.ToLowerInvariant() ?? "mp3";
         var mimeType = AudioMimeType(song.Container);
+        var automaticFormat = AudioTranscodingPolicy.AutomaticFormat(
+            mediaStream?.Codec, SubsonicPlugin.Instance?.Configuration);
         return new()
         {
             ["id"] = song.Id.ToString("N"),
@@ -153,8 +156,8 @@ public static class ItemMapper
             ["size"] = size,
             ["suffix"] = suffix,
             ["contentType"] = mimeType,
-            ["transcodedSuffix"] = suffix,
-            ["transcodedContentType"] = mimeType,
+            ["transcodedSuffix"] = automaticFormat?.Container ?? suffix,
+            ["transcodedContentType"] = automaticFormat?.ContentType ?? mimeType,
             ["discNumber"] = song.ParentIndexNumber ?? 1,
             ["path"] = song.Path ?? "",
             ["bitDepth"] = mediaStream?.BitDepth ?? 16,
