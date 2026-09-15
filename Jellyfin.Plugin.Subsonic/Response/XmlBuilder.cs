@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Xml;
 
@@ -8,10 +9,34 @@ namespace Jellyfin.Plugin.Subsonic.Response;
 
 /// <summary>
 /// Builds attribute-style Subsonic XML responses.
-/// Subsonic XML uses attributes on elements, never child elements for scalar values.
+/// Most scalar values are attributes; lyric lines use element text.
 /// </summary>
 public static class XmlBuilder
 {
+    public static string StructuredLyrics(List<object> structuredLyrics) => OkEnvelope(w =>
+    {
+        w.WriteStartElement("lyricsList", "http://subsonic.org/restapi");
+        foreach (var entry in structuredLyrics.Cast<Dictionary<string, object>>())
+        {
+            var isSynced = (bool)entry["synced"];
+            var entryLang = (string)entry["lang"];
+            w.WriteStartElement("structuredLyrics", "http://subsonic.org/restapi");
+            w.WriteAttributeString("lang", entryLang);
+            w.WriteAttributeString("synced", isSynced ? "true" : "false");
+            w.WriteAttributeString("displayArtist", (string)entry["displayArtist"]);
+            w.WriteAttributeString("displayTitle", (string)entry["displayTitle"]);
+            foreach (var lineObj in ((List<object>)entry["line"]).Cast<Dictionary<string, object>>())
+            {
+                w.WriteStartElement("line", "http://subsonic.org/restapi");
+                w.WriteAttributeString("start", lineObj["start"].ToString());
+                w.WriteString(lineObj["value"]?.ToString() ?? "");
+                w.WriteEndElement();
+            }
+            w.WriteEndElement();
+        }
+        w.WriteEndElement();
+    });
+
     private const string Ns = "http://subsonic.org/restapi";
 
     /// <summary>Wrap a payload-building action in a subsonic-response envelope.</summary>
