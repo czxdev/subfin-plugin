@@ -208,6 +208,11 @@ public class SubsonicController : ControllerBase
 
     private IActionResult Respond(string format, JsonObject json, string? xml = null)
     {
+        if (SubsonicPlugin.Instance?.Configuration.HideArtwork == true)
+        {
+            ArtworkPolicy.RemoveArtwork(json);
+            if (xml != null) xml = ArtworkPolicy.RemoveArtwork(xml);
+        }
         if (format == "json")
             return new ContentResult { Content = json.ToJsonString(), ContentType = "application/json; charset=utf-8", StatusCode = 200 };
         return new ContentResult { Content = xml ?? XmlBuilder.ErrorEnvelope(0, "XML not implemented"), ContentType = "text/xml; charset=utf-8", StatusCode = 200 };
@@ -1808,6 +1813,7 @@ public class SubsonicController : ControllerBase
 
     private IActionResult GetCoverArt(QueryParams p)
     {
+        if (SubsonicPlugin.Instance?.Configuration.HideArtwork == true) return NotFound();
         var id = p.Id;
         if (string.IsNullOrEmpty(id)) return BadRequest();
         if (!Guid.TryParse(ItemMapper.StripPrefix(id), out var guid)) return NotFound();
@@ -1815,7 +1821,9 @@ public class SubsonicController : ControllerBase
     }
 
     private IActionResult GetAvatar(User user) =>
-        Redirect($"{GetPublicJellyfinBaseUrl()}/Users/{user.Id}/Images/Primary");
+        SubsonicPlugin.Instance?.Configuration.HideArtwork == true
+            ? NotFound()
+            : Redirect($"{GetPublicJellyfinBaseUrl()}/Users/{user.Id}/Images/Primary");
 
     // ── Cache helpers ────────────────────────────────────────────────────────
 
