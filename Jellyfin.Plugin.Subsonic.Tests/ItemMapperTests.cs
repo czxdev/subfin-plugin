@@ -96,6 +96,41 @@ public class ItemMapperTests
         }
     }
 
+    [Fact]
+    public void Playlist_ResolvesUncachedLinksAndPreservesDuplicates()
+    {
+        var song = new TestAudio { Id = Guid.NewGuid(), Name = "Song", RunTimeTicks = 20_000_000 };
+        var playlist = new Playlist
+        {
+            Id = Guid.NewGuid(), Name = "Playlist",
+            LinkedChildren = new[]
+            {
+                new LinkedChild { LibraryItemId = song.Id.ToString("N") },
+                new LinkedChild { ItemId = song.Id },
+            },
+        };
+        var library = DispatchProxy.Create<ILibraryManager, ParentLibrary>();
+        ((ParentLibrary)library).Items = new() { [song.Id] = song };
+        var previous = BaseItem.LibraryManager;
+        BaseItem.LibraryManager = library;
+        try
+        {
+            var controller = Controller(library);
+            var user = new User("test", "auth", "reset");
+            var mapped = controller.MapPlaylist(playlist, user, true);
+            Assert.Equal(2, mapped["songCount"]);
+            Assert.Equal(4, mapped["duration"]);
+            Assert.Equal(2, Assert.IsType<List<Dictionary<string, object?>>>(mapped["entry"]).Count);
+            var summary = controller.MapPlaylist(playlist, user, false);
+            Assert.Equal(mapped["songCount"], summary["songCount"]);
+            Assert.Equal(mapped["duration"], summary["duration"]);
+        }
+        finally
+        {
+            BaseItem.LibraryManager = previous;
+        }
+    }
+
     [Theory]
     [InlineData("ar-abc123", "abc123")]
     [InlineData("al-def456", "def456")]

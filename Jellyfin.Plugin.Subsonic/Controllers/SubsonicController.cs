@@ -791,17 +791,12 @@ public class SubsonicController : ControllerBase
         return Respond(format, json, XmlBuilder.Playlist(mapped));
     }
 
-    private Dictionary<string, object?> MapPlaylist(Playlist pl, User user, bool includeSongs)
+    internal Dictionary<string, object?> MapPlaylist(Playlist pl, User user, bool includeSongs)
     {
         var changed = pl.DateLastMediaAdded ?? pl.DateCreated;
-        var songs = includeSongs
-            ? (pl.LinkedChildren ?? Array.Empty<LinkedChild>())
-                .Select(lc => lc.ItemId.HasValue ? _library.GetItemById<Audio>(lc.ItemId.Value) : null)
-                .Where(a => a != null)
-                .Cast<Audio>()
-                .Select(ToSongWithArtist)
-                .ToList()
-            : new List<Dictionary<string, object?>>();
+        var items = pl.GetManageableItems().Select(entry => entry.Item2)
+            .OfType<Audio>().Where(song => song.IsVisible(user)).ToList();
+        var songs = includeSongs ? items.Select(ToSongWithArtist).ToList() : new List<Dictionary<string, object?>>();
 
         return new()
         {
@@ -810,8 +805,8 @@ public class SubsonicController : ControllerBase
             ["comment"] = pl.Overview ?? "",
             ["owner"] = user.Username,
             ["public"] = true,
-            ["songCount"] = pl.LinkedChildren?.Length ?? 0,
-            ["duration"] = songs.Sum(s => s.TryGetValue("duration", out var d) ? d is int i ? i : 0 : 0),
+            ["songCount"] = items.Count,
+            ["duration"] = items.Sum(s => ItemMapper.TicksToSeconds(s.RunTimeTicks)),
             ["created"] = pl.DateCreated.ToString("o"),
             ["changed"] = (changed == default ? pl.DateCreated : changed).ToString("o"),
             ["coverArt"] = $"pl-{pl.Id:N}",
