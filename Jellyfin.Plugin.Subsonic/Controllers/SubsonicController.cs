@@ -440,7 +440,7 @@ public class SubsonicController : ControllerBase
 
     // ── getAlbum ─────────────────────────────────────────────────────────────
 
-    private IActionResult GetAlbum(AuthResult auth, User user, QueryParams p, string format)
+    internal IActionResult GetAlbum(AuthResult auth, User user, QueryParams p, string format)
     {
         var id = p.Id;
         if (!TryParseItemId(id, format, out var guid, out var err)) return err!;
@@ -452,6 +452,7 @@ public class SubsonicController : ControllerBase
         {
             ParentId = guid,
             IncludeItemTypes = [BaseItemKind.Audio],
+            Recursive = true,
             OrderBy = [(ItemSortBy.ParentIndexNumber, SortOrder.Ascending), (ItemSortBy.IndexNumber, SortOrder.Ascending)],
         }).OfType<Audio>().ToList();
 

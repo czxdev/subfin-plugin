@@ -120,8 +120,7 @@ public static class ItemMapper
         var size = song.Size ?? 0L;
         var bitRate = duration > 0 && size > 0 ? (int)((size * 8L) / duration / 1000L) : 0;
 
-        // Audio.ParentId is the album's Guid
-        var effectiveAlbumId = albumId ?? song.ParentId.ToString("N");
+        var effectiveAlbumId = albumId ?? (song.AlbumEntity?.Id ?? song.ParentId).ToString("N");
         var primaryArtist = artistName ?? song.AlbumArtists.FirstOrDefault() ?? song.Artists.FirstOrDefault() ?? "";
 
         // Get audio stream metadata
