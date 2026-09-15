@@ -69,3 +69,17 @@ Admins can delete any share from that page. Non-admins can only delete their own
 ### Library selection
 
 Each user can choose which Jellyfin music libraries are visible through Subsonic clients. Open the device manager and use the **Library Selection** section. Deselecting all libraries shows everything (no restriction).
+
+### Catalog comparison
+
+`scripts/compare_subfin_jellyfin.py` compares native audio with Subsonic search and
+album traversal. Configure `JELLYFIN_URL`, `JELLYFIN_TOKEN`, `SUBFIN_USER`, and
+`SUBFIN_PASSWORD` through environment variables, then run:
+
+```sh
+python3 scripts/compare_subfin_jellyfin.py --out-dir catalog-diff
+```
+
+API keys have no user, so Jellyfin's `/Users/Me` returns HTTP 400 for them. The
+script then resolves the exact matching username. Use `--jellyfin-user-id` or
+`JELLYFIN_USER_ID` if the linked device username differs from the Jellyfin user.
