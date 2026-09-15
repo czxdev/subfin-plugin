@@ -17,6 +17,8 @@ using Jellyfin.Plugin.Subsonic.Auth;
 using Jellyfin.Plugin.Subsonic.Mappers;
 using Jellyfin.Plugin.Subsonic.Response;
 using Jellyfin.Plugin.Subsonic.Store;
+using Jellyfin.Plugin.Subsonic.Configuration;
+using Jellyfin.Plugin.Subsonic.Transcoding;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -187,7 +189,7 @@ public class SubsonicController : ControllerBase
             "getlyrics" => await GetLyrics(user, p, format),
             "getlyricsbysongid" => await GetLyricsBySongId(user, p, format),
             "stream" => await Stream(auth, p),
-            "download" => Download(p),
+            "download" => await Download(auth, p),
             "getcoverart" => GetCoverArt(p),
             "getavatar" => GetAvatar(user),
             _ => Respond(format, SubsonicEnvelope.Error(ErrorCode.NotFound, $"Unknown method: {method}"), XmlBuilder.ErrorEnvelope(ErrorCode.NotFound, $"Unknown method: {method}"))
@@ -1725,88 +1727,74 @@ public class SubsonicController : ControllerBase
         return existing.AccessToken;
     }
 
-    private static (string container, string audioCodec, string mimeType) MapTranscodeFormat(string? format) =>
-        (format ?? "mp3") switch
-        {
-            "mp3"  => ("mp3",  "mp3",    "audio/mpeg"),
-            "aac"  => ("aac",  "aac",    "audio/aac"),
-            "ogg"  => ("ogg",  "vorbis", "audio/ogg"),
-            "opus" => ("webm", "opus",   "audio/webm"),
-            "flac" => ("flac", "flac",   "audio/flac"),
-            _      => ("mp3",  "mp3",    "audio/mpeg"),
-        };
+    private Task<IActionResult> Stream(AuthResult auth, QueryParams p) =>
+        ServeAudio(auth, p, false, SubsonicPlugin.Instance?.Configuration ?? new PluginConfiguration());
 
-    private async Task<IActionResult> Stream(AuthResult auth, QueryParams p)
+    private Task<IActionResult> Download(AuthResult auth, QueryParams p) =>
+        ServeAudio(auth, p, true, SubsonicPlugin.Instance?.Configuration ?? new PluginConfiguration());
+
+    internal async Task<IActionResult> ServeAudio(AuthResult auth, QueryParams p, bool download, PluginConfiguration config)
     {
-        var id = p.Id;
-        if (string.IsNullOrEmpty(id)) return BadRequest();
-        if (!Guid.TryParse(ItemMapper.StripPrefix(id), out var guid)) return NotFound();
-
-        // Check share allowlist
+        if (string.IsNullOrEmpty(p.Id)) return BadRequest();
+        if (!Guid.TryParse(ItemMapper.StripPrefix(p.Id), out var guid)) return NotFound();
         if (auth.ShareAllowedIds != null && !auth.ShareAllowedIds.Contains(guid.ToString("N")))
             return StatusCode(403);
+        if (p.Format != null && !string.Equals(p.Format, "raw", StringComparison.OrdinalIgnoreCase)
+            && AudioTranscodingPolicy.FindFormat(p.Format) == null)
+            return BadRequest("Supported formats: raw, mp3, aac, flac, ogg, opus.");
+        if (p.TimeOffset < 0) return BadRequest("timeOffset must be non-negative.");
 
         var item = _library.GetItemById<Audio>(guid);
         if (item?.Path == null) return NotFound();
-
-        var format  = p.Format;
-        var bitRate = p.MaxBitRate;   // kbps; 0 = unspecified
-        var timeOff = p.TimeOffset;   // seconds; 0 = from start
-
-        bool needsTranscode = (format != null && format != "raw") || bitRate > 0 || timeOff > 0;
-
-        _logger.LogInformation("[Subfin] stream id={Id} format={Format} bitRate={BitRate} timeOff={TimeOff} needsTranscode={NeedsTranscode}",
-            id, format, bitRate, timeOff, needsTranscode);
-
-        if (!needsTranscode)
-            return PhysicalFile(item.Path, ItemMapper.AudioMimeType(item.Container), null, true);
+        var codec = item.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Audio)?.Codec;
+        var plan = download && !config.TranscodeDownloads ? null :
+            AudioTranscodingPolicy.ForStream(codec, p.Format, p.MaxBitRate, p.TimeOffset, config);
+        if (plan == null)
+            return PhysicalFile(item.Path, ItemMapper.AudioMimeType(item.Container), download ? Path.GetFileName(item.Path) : null, true);
 
         var apiKey = await GetOrCreatePluginApiKey();
         if (string.IsNullOrEmpty(apiKey))
-        {
-            _logger.LogWarning("[Subfin] Could not obtain plugin API key — serving direct");
-            return PhysicalFile(item.Path, ItemMapper.AudioMimeType(item.Container), null, true);
-        }
+            return StatusCode(503, "Unable to obtain Jellyfin transcoding credentials.");
 
-        var (container, audioCodec, mimeType) = MapTranscodeFormat(format);
-        var qs = $"audioCodec={audioCodec}&static=false" +
-                 $"&userId={auth.JellyfinUserId}" +
-                 $"&deviceId={Uri.EscapeDataString(auth.JellyfinDeviceId ?? "subfin")}";
-        if (bitRate > 0) qs += $"&audioBitRate={bitRate * 1000}";
-        if (timeOff > 0) qs += $"&startTimeTicks={(long)timeOff * 10_000_000L}";
-
-        var url = $"{GetLocalJellyfinBaseUrl()}/Audio/{guid:N}/stream.{container}?{qs}";
-        _logger.LogInformation("[Subfin] stream proxy → {Url}", url);
-        var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.TryAddWithoutValidation("Authorization", $"MediaBrowser Token=\"{apiKey}\"");
-
-        var rangeHeader = Request.Headers["Range"].ToString();
-        if (!string.IsNullOrEmpty(rangeHeader))
-            req.Headers.TryAddWithoutValidation("Range", rangeHeader);
-
-        var resp = await _httpClientFactory.CreateClient().SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-        Response.RegisterForDispose(resp);
-        Response.StatusCode = (int)resp.StatusCode;
-
-        if (resp.Content.Headers.ContentLength.HasValue)
-            Response.Headers["Content-Length"] = resp.Content.Headers.ContentLength.Value.ToString();
-        if (resp.Content.Headers.ContentRange != null)
-            Response.Headers["Content-Range"] = resp.Content.Headers.ContentRange.ToString();
-
-        // Use our known mimeType — Jellyfin may return "video/webm" for audio-only WebM which confuses clients
-        return new FileStreamResult(await resp.Content.ReadAsStreamAsync(), mimeType);
+        var url = BuildTranscodingUrl(GetLocalJellyfinBaseUrl(), guid, auth, plan, p.TimeOffset);
+        _logger.LogInformation("[Subfin] Transcoding {Id} from {Codec} to {Target} at {SampleRate} Hz",
+            guid, codec, plan.Format.Codec, plan.SampleRate);
+        return await ProxyTranscode(url, apiKey, plan.Format.ContentType,
+            download ? Path.GetFileNameWithoutExtension(item.Path) + "." + plan.Format.Container : null);
     }
 
-    private IActionResult Download(QueryParams p)
+    internal static string BuildTranscodingUrl(string baseUrl, Guid id, AuthResult auth, AudioTranscodingPlan plan, int timeOffset)
     {
-        var id = p.Id;
-        if (string.IsNullOrEmpty(id)) return BadRequest();
-        if (!Guid.TryParse(ItemMapper.StripPrefix(id), out var guid)) return NotFound();
+        var query = $"audioCodec={plan.Format.Codec}&static=false&allowAudioStreamCopy=false&enableAutoStreamCopy=false" +
+                    $"&userId={Uri.EscapeDataString(auth.JellyfinUserId)}" +
+                    $"&deviceId={Uri.EscapeDataString(auth.JellyfinDeviceId ?? "subfin")}" +
+                    $"&audioSampleRate={plan.SampleRate}&maxAudioBitDepth=24";
+        if (plan.BitRate.HasValue) query += $"&audioBitRate={plan.BitRate.Value * 1000}";
+        if (timeOffset > 0) query += $"&startTimeTicks={(long)timeOffset * 10_000_000L}";
+        return $"{baseUrl}/Audio/{id:N}/stream.{plan.Format.Container}?{query}";
+    }
 
-        var item = _library.GetItemById<Audio>(guid);
-        if (item?.Path == null) return NotFound();
+    internal async Task<IActionResult> ProxyTranscode(string url, string apiKey, string contentType, string? fileName)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.TryAddWithoutValidation("Authorization", $"MediaBrowser Token=\"{apiKey}\"");
+        var rangeHeader = Request.Headers["Range"].ToString();
+        if (!string.IsNullOrEmpty(rangeHeader)) req.Headers.TryAddWithoutValidation("Range", rangeHeader);
 
-        return PhysicalFile(item.Path, ItemMapper.AudioMimeType(item.Container), Path.GetFileName(item.Path), true);
+        var resp = await _httpClientFactory.CreateClient().SendAsync(req, HttpCompletionOption.ResponseHeadersRead, HttpContext.RequestAborted);
+        Response.RegisterForDispose(resp);
+        if (!resp.IsSuccessStatusCode) return StatusCode((int)resp.StatusCode);
+        Response.StatusCode = (int)resp.StatusCode;
+        if (resp.Content.Headers.ContentLength.HasValue)
+            Response.ContentLength = resp.Content.Headers.ContentLength.Value;
+        if (resp.Content.Headers.ContentRange != null)
+            Response.Headers["Content-Range"] = resp.Content.Headers.ContentRange.ToString();
+        if (resp.Headers.AcceptRanges.Count > 0)
+            Response.Headers["Accept-Ranges"] = string.Join(", ", resp.Headers.AcceptRanges);
+        return new FileStreamResult(await resp.Content.ReadAsStreamAsync(HttpContext.RequestAborted), contentType)
+        {
+            FileDownloadName = fileName,
+        };
     }
 
     // ── getCoverArt / getAvatar ──────────────────────────────────────────────

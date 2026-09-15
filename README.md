@@ -40,7 +40,7 @@ song album IDs reference the containing album rather than a disc folder.
 Playlist entries resolve uncached links and preserve order and duplicates.
 Structured XML lyrics carry their text inside each line element.
 
-After installing, restart Jellyfin and confirm the plugin version is **10.10.5.5**.
+After installing, restart Jellyfin and confirm the plugin version is **10.10.5.6**.
 Rebuild an existing client's library if it previously imported disc folders as albums.
 
 ### Hide artwork
@@ -83,3 +83,45 @@ python3 scripts/compare_subfin_jellyfin.py --out-dir catalog-diff
 API keys have no user, so Jellyfin's `/Users/Me` returns HTTP 400 for them. The
 script then resolves the exact matching username. Use `--jellyfin-user-id` or
 `JELLYFIN_USER_ID` if the linked device username differs from the Jellyfin user.
+
+### Automatic audio transcoding (10.10.5.6)
+
+Enable **Automatically transcode unsupported audio codecs** in the plugin settings.
+**Supported audio codecs** is a server-wide, case-insensitive list of Jellyfin codec
+names. Use the common set supported by your clients. This is administrator-defined
+compatibility, not automatic detection of each client's capabilities. For example,
+`dsd_lsbf_planar` is a codec; `dsf` is a container/extension and will not match it.
+Unknown codecs and codecs outside the list use the selected target. An empty list
+transcodes every codec. The feature is disabled by default.
+
+Targets are MP3, AAC in ADTS, FLAC, Vorbis in Ogg, and Opus in WebM. Default output
+is MP3 at 192 kbps and 48 kHz. The bitrate and sample rate are configurable; lower
+client bitrate limits take precedence. FLAC ignores bitrate limits and Opus uses
+48 kHz. Sample-rate conversion means that FLAC output is not a bit-perfect copy of
+a DSD source. Jellyfin performs the conversion and manages its temporary cache;
+the original audio files are unchanged.
+
+Clients should select **server-selected format** for playback. An explicit output
+format overrides the automatic target, and `format=raw` always returns the original
+file (also bypassing bitrate and time-offset transcoding). Supported source codecs
+are served directly unless the client requests a format, bitrate limit or offset.
+Seeking in converted audio uses `timeOffset` in seconds; byte ranges refer to the
+converted output and are delegated to Jellyfin.
+
+**Also apply transcoding to downloads** is an independent, opt-in setting. With it
+disabled, the download endpoint retains original-file behavior. With it enabled,
+downloads use the same policy and the response filename/MIME describe the converted
+format. Explicit `raw` still opts out. Clients that cache original downloads should
+clear those files or request a fresh download after changing the policy. Clients
+must honor the returned stream format; unsupported source extensions remain visible
+as source metadata, while `transcodedSuffix` and `transcodedContentType` describe
+the automatic output. Re-sync metadata after changing the target.
+
+Transcoding failures are returned as errors rather than silently sending the
+unsupported source. Existing Jellyfin API-key authorization and proxy URL handling
+are reused; no media credentials appear in generated transcoding URLs.
+
+Validation on Jellyfin 10.10.7: a `dsd_lsbf_planar` / DSF source was converted to all
+five target formats at 48 kHz. Short samples decoded successfully; the MP3 path was
+also checked through the plugin's policy and HTTP proxy using the complete song.
+A server installation and client playback check remain necessary after upgrading.

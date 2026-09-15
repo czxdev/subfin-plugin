@@ -25,6 +25,50 @@
             <div class="fieldDescription">Optional public URL used by Subfin when generating client-visible links. Set this when a reverse proxy strips a path prefix before forwarding to Jellyfin. Leave empty to auto-detect.</div>
           </div>
 
+          <h3>Audio transcoding</h3>
+          <div class="checkboxContainer checkboxContainer-withDescription">
+            <label class="emby-checkbox-label">
+              <input id="automaticTranscodingEnabled" type="checkbox" />
+              <span>Automatically transcode unsupported audio codecs</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">Applies to all clients using server-selected stream format. An explicit format overrides this policy; raw always returns the original file.</div>
+          </div>
+          <div class="inputContainer">
+            <label class="inputLabel" for="supportedAudioCodecs">Supported audio codecs</label>
+            <input id="supportedAudioCodecs" is="emby-input" type="text" class="emby-input" />
+            <div class="fieldDescription">Comma-separated Jellyfin codec names, not file extensions. Matching is case-insensitive. Codecs not listed, including unknown codecs, are transcoded. An empty list transcodes all audio.</div>
+          </div>
+          <div class="selectContainer">
+            <label class="selectLabel" for="automaticTranscodingFormat">Target format</label>
+            <select id="automaticTranscodingFormat" is="emby-select" class="emby-select">
+              <option value="mp3">MP3</option>
+              <option value="aac">AAC (ADTS)</option>
+              <option value="flac">FLAC</option>
+              <option value="ogg">Vorbis (Ogg)</option>
+              <option value="opus">Opus (WebM)</option>
+            </select>
+          </div>
+          <div class="inputContainer">
+            <label class="inputLabel" for="transcodingBitRate">Transcoding bitrate (kbps)</label>
+            <input id="transcodingBitRate" is="emby-input" type="number" min="8" max="320" required class="emby-input" />
+            <div class="fieldDescription">Default for lossy output. A lower client bitrate limit takes precedence. FLAC ignores this setting.</div>
+          </div>
+          <div class="selectContainer">
+            <label class="selectLabel" for="transcodingSampleRate">Transcoding sample rate</label>
+            <select id="transcodingSampleRate" is="emby-select" class="emby-select">
+              <option value="44100">44.1 kHz</option>
+              <option value="48000">48 kHz</option>
+            </select>
+            <div class="fieldDescription">Applied to transcoded output, including high-rate DSD sources. Opus uses 48 kHz.</div>
+          </div>
+          <div class="checkboxContainer checkboxContainer-withDescription">
+            <label class="emby-checkbox-label">
+              <input id="transcodeDownloads" type="checkbox" />
+              <span>Also apply transcoding to downloads</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">Optional: apply the same policy to the download endpoint for offline playback. Disabled downloads remain original files. Original files on the server are never modified.</div>
+          </div>
+
           <div class="checkboxContainer checkboxContainer-withDescription">
             <label class="emby-checkbox-label">
               <input id="hideArtwork" type="checkbox" />
@@ -67,6 +111,12 @@
               document.getElementById('sharingEnabled').checked = config.SharingEnabled !== false;
               document.getElementById('hideArtwork').checked = !!config.HideArtwork;
               document.getElementById('logRestRequests').checked = !!config.LogRestRequests;
+              document.getElementById('automaticTranscodingEnabled').checked = !!config.AutomaticTranscodingEnabled;
+              document.getElementById('supportedAudioCodecs').value = config.SupportedAudioCodecs ?? 'aac,mp3,flac,alac,vorbis,opus,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le';
+              document.getElementById('automaticTranscodingFormat').value = config.AutomaticTranscodingFormat || 'mp3';
+              document.getElementById('transcodingBitRate').value = config.TranscodingBitRate ?? 192;
+              document.getElementById('transcodingSampleRate').value = config.TranscodingSampleRate ?? 48000;
+              document.getElementById('transcodeDownloads').checked = !!config.TranscodeDownloads;
               Dashboard.hideLoadingMsg();
             });
 
@@ -80,6 +130,12 @@
                 config.SharingEnabled = document.getElementById('sharingEnabled').checked;
                 config.HideArtwork = document.getElementById('hideArtwork').checked;
                 config.LogRestRequests = document.getElementById('logRestRequests').checked;
+                config.AutomaticTranscodingEnabled = document.getElementById('automaticTranscodingEnabled').checked;
+                config.SupportedAudioCodecs = document.getElementById('supportedAudioCodecs').value.trim();
+                config.AutomaticTranscodingFormat = document.getElementById('automaticTranscodingFormat').value;
+                config.TranscodingBitRate = Number(document.getElementById('transcodingBitRate').value);
+                config.TranscodingSampleRate = Number(document.getElementById('transcodingSampleRate').value);
+                config.TranscodeDownloads = document.getElementById('transcodeDownloads').checked;
                 ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                   Dashboard.processPluginConfigurationUpdateResult(result);
                 });
