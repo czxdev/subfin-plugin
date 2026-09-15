@@ -12,6 +12,31 @@ namespace Jellyfin.Plugin.Subsonic.Tests;
 /// </summary>
 public class ClientCompatibilityTests
 {
+    [Fact]
+    public void StructuredLyrics_ContainTextAndPreserveXmlCharacters()
+    {
+        var lyrics = new List<object>
+        {
+            new Dictionary<string, object>
+            {
+                ["lang"] = "und", ["synced"] = true,
+                ["displayArtist"] = "Artist", ["displayTitle"] = "Song",
+                ["line"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["start"] = 0, ["value"] = "君 & <me>" },
+                    new Dictionary<string, object> { ["start"] = 1500, ["value"] = "Second line" },
+                },
+            },
+        };
+        var doc = Parse(XmlBuilder.StructuredLyrics(lyrics));
+        var lines = doc.GetElementsByTagName("line", "http://subsonic.org/restapi");
+        Assert.Equal(2, lines.Count);
+        Assert.Equal("君 & <me>", lines[0]!.InnerText);
+        Assert.Equal("0", ((XmlElement)lines[0]!).GetAttribute("start"));
+        Assert.False(((XmlElement)lines[0]!).HasAttribute("value"));
+        Assert.Equal("Second line", lines[1]!.InnerText);
+    }
+
     private static XmlDocument Parse(string xml)
     {
         var doc = new XmlDocument();

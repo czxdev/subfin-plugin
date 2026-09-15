@@ -1684,29 +1684,7 @@ public class SubsonicController : ControllerBase
             ["lyricsList"] = new Dictionary<string, object> { ["structuredLyrics"] = structuredLyrics }
         });
 
-        return Respond(format, json, XmlBuilder.OkEnvelope(w =>
-        {
-            w.WriteStartElement("lyricsList", "http://subsonic.org/restapi");
-            foreach (var entry in structuredLyrics.Cast<Dictionary<string, object>>())
-            {
-                var isSynced = (bool)entry["synced"];
-                var entryLang = (string)entry["lang"];
-                w.WriteStartElement("structuredLyrics", "http://subsonic.org/restapi");
-                w.WriteAttributeString("lang", entryLang);
-                w.WriteAttributeString("synced", isSynced ? "true" : "false");
-                w.WriteAttributeString("displayArtist", (string)entry["displayArtist"]);
-                w.WriteAttributeString("displayTitle", (string)entry["displayTitle"]);
-                foreach (var lineObj in ((List<object>)entry["line"]).Cast<Dictionary<string, object>>())
-                {
-                    w.WriteStartElement("line", "http://subsonic.org/restapi");
-                    w.WriteAttributeString("start", lineObj["start"].ToString());
-                    w.WriteAttributeString("value", lineObj["value"]?.ToString() ?? "");
-                    w.WriteEndElement();
-                }
-                w.WriteEndElement();
-            }
-            w.WriteEndElement();
-        }));
+        return Respond(format, json, XmlBuilder.StructuredLyrics(structuredLyrics));
     }
 
     // ── stream / download ────────────────────────────────────────────────────
