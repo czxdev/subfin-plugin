@@ -33,6 +33,25 @@ To revoke a client's access, return to the device manager and click **Unlink**.
 
 Admin settings are in **Dashboard → Plugins → Subfin** (the Jellyfin plugin config page).
 
+### Catalog compatibility (10.10.5.5)
+
+This build targets Jellyfin 10.10.7. Album queries include disc subfolders, and
+song album IDs reference the containing album rather than a disc folder.
+Playlist entries resolve uncached links and preserve order and duplicates.
+Structured XML lyrics carry their text inside each line element.
+
+After installing, restart Jellyfin and confirm the plugin version is **10.10.5.5**.
+Rebuild an existing client's library if it previously imported disc folders as albums.
+
+### Hide artwork
+
+Enable **Hide artwork** to remove artwork references from XML and JSON responses
+and return HTTP 404 from `getCoverArt` and `getAvatar`. Clients can then use their
+default icons. This applies to all Subfin users and is disabled by default.
+Jellyfin's own artwork is unchanged. Clear existing artwork caches in the client,
+restart it, and disable display of embedded audio artwork. The plugin cannot delete
+client caches or remove artwork from original audio files.
+
 ### Last.fm
 
 Enter a Last.fm API key to enable artist biographies and images in clients that request them (`getArtistInfo`, `getArtistInfo2`). Leave blank to skip that data.
