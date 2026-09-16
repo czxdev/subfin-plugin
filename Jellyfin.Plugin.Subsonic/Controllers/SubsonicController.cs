@@ -1645,6 +1645,8 @@ public class SubsonicController : ControllerBase
         }));
     }
 
+    internal static bool AreLyricsSynced(IReadOnlyList<MediaBrowser.Model.Lyrics.LyricLine> lyrics, bool? metadataIsSynced) =>
+        metadataIsSynced == true || lyrics.All(l => l.Start.HasValue);
     private async Task<IActionResult> GetLyricsBySongId(User user, QueryParams p, string format)
     {
         var id = p.Id;
@@ -1662,7 +1664,7 @@ public class SubsonicController : ControllerBase
             // Mark synced if metadata says so OR every line has a non-zero timestamp (LRC files
             // don't always set IsSynced). Require ALL lines to have timestamps — Tempus crashes
             // (NPE) on auto-unbox if any synced line is missing start.
-            var synced = dto.Metadata?.IsSynced == true || dto.Lyrics.All(l => l.Start.HasValue);
+            var synced = AreLyricsSynced(dto.Lyrics, dto.Metadata?.IsSynced);
             var lang = "und"; // undetermined — Jellyfin doesn't expose language per lyric set
             var displayArtist = song.Artists.FirstOrDefault() ?? "";
             var displayTitle = song.Name ?? "";
@@ -1745,9 +1747,25 @@ public class SubsonicController : ControllerBase
 
         var item = _library.GetItemById<Audio>(guid);
         if (item?.Path == null) return NotFound();
-        var codec = item.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Audio)?.Codec;
+
+        var audioStream = item.GetMediaStreams().FirstOrDefault(s => s.Type == MediaStreamType.Audio);
+        var codec = audioStream?.Codec;
+        var sourceBitRate = audioStream?.BitRate;
+
+        // Jellyfin normally exposes the stream bitrate. Fall back to the file-average bitrate
+        // when probe metadata is missing so maxBitRate does not force needless transcoding.
+        var sourceSize = item.Size;
+        var runTimeTicks = item.RunTimeTicks;
+        if ((!sourceBitRate.HasValue || sourceBitRate.Value <= 0)
+            && sourceSize.HasValue && sourceSize.Value > 0
+            && runTimeTicks.HasValue && runTimeTicks.Value > 0)
+        {
+            var estimatedBitRate = sourceSize.Value * 8.0 * TimeSpan.TicksPerSecond / runTimeTicks.Value;
+            sourceBitRate = estimatedBitRate >= int.MaxValue ? int.MaxValue : (int)Math.Round(estimatedBitRate);
+        }
+
         var plan = download && !config.TranscodeDownloads ? null :
-            AudioTranscodingPolicy.ForStream(codec, p.Format, p.MaxBitRate, p.TimeOffset, config);
+            AudioTranscodingPolicy.ForStream(codec, sourceBitRate, p.Format, p.MaxBitRate, p.TimeOffset, config);
         if (plan == null)
             return PhysicalFile(item.Path, ItemMapper.AudioMimeType(item.Container), download ? Path.GetFileName(item.Path) : null, true);
 
@@ -1756,8 +1774,8 @@ public class SubsonicController : ControllerBase
             return StatusCode(503, "Unable to obtain Jellyfin transcoding credentials.");
 
         var url = BuildTranscodingUrl(GetLocalJellyfinBaseUrl(), guid, auth, plan, p.TimeOffset);
-        _logger.LogInformation("[Subfin] Transcoding {Id} from {Codec} to {Target} at {SampleRate} Hz",
-            guid, codec, plan.Format.Codec, plan.SampleRate);
+        _logger.LogInformation("[Subfin] Transcoding {Id} from {Codec} ({SourceBitRate} bps) to {Target} at {SampleRate} Hz; client max={MaxBitRate} kbps",
+            guid, codec, sourceBitRate, plan.Format.Codec, plan.SampleRate, p.MaxBitRate);
         return await ProxyTranscode(url, apiKey, plan.Format.ContentType,
             download ? Path.GetFileNameWithoutExtension(item.Path) + "." + plan.Format.Container : null);
     }

@@ -272,7 +272,6 @@ public class ClientCompatibilityTests
         Assert.NotNull(songLyrics);
         Assert.Equal("1", songLyrics!["versions", ns]!.InnerText);
     }
-}
 
 /// <summary>
 /// A synchronized LRC may legitimately start at 0 ms.
@@ -313,4 +312,5 @@ public void Amperfy_UnsyncedLyrics_WithoutStarts_IsNotSynced()
         metadataIsSynced: null);
 
     Assert.False(synced);
+}
 }

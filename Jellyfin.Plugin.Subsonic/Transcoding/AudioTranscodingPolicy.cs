@@ -29,18 +29,33 @@ internal static class AudioTranscodingPolicy
     }
 
     internal static AudioTranscodingPlan? ForStream(
-        string? codec, string? requestedFormat, int maxBitRate, int timeOffset, PluginConfiguration config)
+        string? codec, int? sourceBitRate, string? requestedFormat, int maxBitRate, int timeOffset, PluginConfiguration config)
     {
         if (string.Equals(requestedFormat, "raw", StringComparison.OrdinalIgnoreCase)) return null;
+
         var format = requestedFormat == null
             ? AutomaticFormat(codec, config)
             : FindFormat(requestedFormat) ?? throw new ArgumentException("Unsupported output format.", nameof(requestedFormat));
-        if (format == null && maxBitRate <= 0 && timeOffset <= 0) return null;
-        format ??= FindFormat("mp3")!;
+
+        // maxBitRate is an upper bound, not a request to transcode unconditionally.
+        // Keep a directly playable source untouched when it is already at or below the limit.
+        // If the source bitrate is unknown, transcode conservatively so the requested limit is honored.
+        var exceedsBitRateLimit = maxBitRate > 0
+            && (!sourceBitRate.HasValue || sourceBitRate.Value <= 0 || sourceBitRate.Value > maxBitRate * 1000L);
+
+        if (format == null && !exceedsBitRateLimit && timeOffset <= 0) return null;
+
+        // Bitrate limiting and transcodeOffset can independently require transcoding even when
+        // the source codec itself is supported. Use the administrator-selected target instead of
+        // silently falling back to MP3 in those cases.
+        format ??= FindFormat(config.AutomaticTranscodingFormat)
+            ?? throw new InvalidOperationException("Automatic transcoding target must be mp3, aac, flac, ogg, or opus.");
+
         if (config.TranscodingSampleRate is not (8000 or 11025 or 12000 or 16000 or 22050 or 24000 or 32000 or 44100 or 48000))
             throw new InvalidOperationException("Invalid transcoding sample rate.");
         if (config.TranscodingBitRate is < 8 or > 320)
             throw new InvalidOperationException("Transcoding bitrate must be between 8 and 320 kbps.");
+
         var sampleRate = format.Codec == "opus" ? 48000 : config.TranscodingSampleRate;
         var bitRate = maxBitRate > 0 ? Math.Min(maxBitRate, config.TranscodingBitRate) : config.TranscodingBitRate;
         return new(format, sampleRate, format.Codec == "flac" ? null : bitRate);

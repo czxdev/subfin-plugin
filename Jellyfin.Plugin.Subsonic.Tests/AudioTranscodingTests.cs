@@ -22,7 +22,7 @@ public class AudioTranscodingTests
     {
         var config = Enabled();
         config.AutomaticTranscodingFormat = "flac";
-        var plan = AudioTranscodingPolicy.ForStream(codec, null, 0, 0, config)!;
+        var plan = AudioTranscodingPolicy.ForStream(codec, 5_644_800, null, 0, 0, config)!;
         Assert.Equal("flac", plan.Format.Codec);
         Assert.Equal(48000, plan.SampleRate);
         Assert.Null(plan.BitRate);
@@ -33,11 +33,11 @@ public class AudioTranscodingTests
     [InlineData("FLAC")]
     [InlineData("aac")]
     public void SupportedCodecRemainsOriginal(string codec) =>
-        Assert.Null(AudioTranscodingPolicy.ForStream(codec, null, 0, 0, Enabled()));
+        Assert.Null(AudioTranscodingPolicy.ForStream(codec, 128_000, null, 0, 0, Enabled()));
 
     [Fact]
     public void DisabledPolicyLeavesDsdUnchanged() =>
-        Assert.Null(AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", null, 0, 0, new PluginConfiguration()));
+        Assert.Null(AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, null, 0, 0, new PluginConfiguration()));
 
     [Fact]
     public void CodecListUsesExactNamesAndAcceptsWhitespace()
@@ -54,7 +54,7 @@ public class AudioTranscodingTests
 
     [Fact]
     public void ExplicitRawOverridesAutomaticPolicyAndBitrateLimit() =>
-        Assert.Null(AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", "RAW", 128, 10, Enabled()));
+        Assert.Null(AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, "RAW", 128, 10, Enabled()));
 
     [Theory]
     [InlineData("mp3", "mp3", "audio/mpeg")]
@@ -66,19 +66,64 @@ public class AudioTranscodingTests
     {
         var config = Enabled();
         config.AutomaticTranscodingFormat = "flac";
-        var plan = AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", target, 0, 0, config)!;
+        var plan = AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, target, 0, 0, config)!;
         Assert.Equal(container, plan.Format.Container);
         Assert.Equal(mime, plan.Format.ContentType);
     }
 
+    [Theory]
+    [InlineData(128_000, 320)]
+    [InlineData(320_000, 320)]
+    public void SupportedCodecAtOrBelowBitrateLimitRemainsOriginal(int sourceBitRate, int maxBitRate)
+    {
+        var plan = AudioTranscodingPolicy.ForStream("mp3", sourceBitRate, null, maxBitRate, 0, Enabled());
+        Assert.Null(plan);
+    }
+
     [Fact]
-    public void BitrateAndTimeOffsetStillRequestTranscoding()
+    public void SupportedCodecAboveBitrateLimitUsesConfiguredTarget()
     {
         var config = Enabled();
-        var limited = AudioTranscodingPolicy.ForStream("mp3", null, 96, 0, config)!;
-        Assert.Equal(96, limited.BitRate);
-        Assert.NotNull(AudioTranscodingPolicy.ForStream("mp3", null, 0, 20, config));
-        Assert.Equal(192, AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", null, 320, 0, config)!.BitRate);
+        config.AutomaticTranscodingFormat = "aac";
+        var plan = AudioTranscodingPolicy.ForStream("mp3", 320_000, null, 128, 0, config)!;
+        Assert.Equal("aac", plan.Format.Codec);
+        Assert.Equal(128, plan.BitRate);
+    }
+
+    [Fact]
+    public void BitrateLimitStillAppliesWhenAutomaticCodecPolicyIsDisabled()
+    {
+        var config = new PluginConfiguration
+        {
+            AutomaticTranscodingEnabled = false,
+            AutomaticTranscodingFormat = "aac",
+        };
+        var plan = AudioTranscodingPolicy.ForStream("mp3", 320_000, null, 128, 0, config)!;
+        Assert.Equal("aac", plan.Format.Codec);
+        Assert.Equal(128, plan.BitRate);
+    }
+
+    [Fact]
+    public void UnknownSourceBitrateWithLimitTranscodesConservatively()
+    {
+        var plan = AudioTranscodingPolicy.ForStream("mp3", null, null, 128, 0, Enabled());
+        Assert.NotNull(plan);
+        Assert.Equal(128, plan!.BitRate);
+    }
+
+    [Fact]
+    public void TimeOffsetStillRequestsTranscoding()
+    {
+        var plan = AudioTranscodingPolicy.ForStream("mp3", 128_000, null, 0, 20, Enabled());
+        Assert.NotNull(plan);
+        Assert.Equal("mp3", plan!.Format.Codec);
+    }
+
+    [Fact]
+    public void UnsupportedCodecWithLooseBitrateLimitUsesConfiguredDefaultBitrate()
+    {
+        var plan = AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, null, 320, 0, Enabled())!;
+        Assert.Equal(192, plan.BitRate);
     }
 
     [Fact]
@@ -87,17 +132,17 @@ public class AudioTranscodingTests
         var config = Enabled();
         config.AutomaticTranscodingFormat = "invalid";
         Assert.Throws<InvalidOperationException>(() => AudioTranscodingPolicy.AutomaticFormat("dsd_lsbf_planar", config));
-        Assert.Throws<ArgumentException>(() => AudioTranscodingPolicy.ForStream("aac", "invalid", 0, 0, config));
+        Assert.Throws<ArgumentException>(() => AudioTranscodingPolicy.ForStream("aac", 128_000, "invalid", 0, 0, config));
         config.AutomaticTranscodingFormat = "mp3";
         config.TranscodingSampleRate = 705600;
-        Assert.Throws<InvalidOperationException>(() => AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", null, 0, 0, config));
+        Assert.Throws<InvalidOperationException>(() => AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, null, 0, 0, config));
     }
 
     [Fact]
     public void TranscodingUrlResamplesDsdAndPreservesSeekWithoutExposingCredentials()
     {
         var config = Enabled();
-        var plan = AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", null, 128, 30, config)!;
+        var plan = AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, null, 128, 30, config)!;
         var auth = new AuthResult("user", "user-id", "device & 1", null);
         var url = SubsonicController.BuildTranscodingUrl("http://localhost:8096/prefix", Guid.Empty, auth, plan, 30);
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(url).Query);
@@ -115,7 +160,7 @@ public class AudioTranscodingTests
     {
         var config = Enabled();
         config.TranscodingSampleRate = 44100;
-        Assert.Equal(48000, AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", "opus", 0, 0, config)!.SampleRate);
+        Assert.Equal(48000, AudioTranscodingPolicy.ForStream("dsd_lsbf_planar", 5_644_800, "opus", 0, 0, config)!.SampleRate);
     }
 
     [Theory]
