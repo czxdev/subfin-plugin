@@ -1662,8 +1662,7 @@ public class SubsonicController : ControllerBase
             // Mark synced if metadata says so OR every line has a non-zero timestamp (LRC files
             // don't always set IsSynced). Require ALL lines to have timestamps — Tempus crashes
             // (NPE) on auto-unbox if any synced line is missing start.
-            var allHaveTimestamps = dto.Lyrics.All(l => l.Start.HasValue && l.Start.Value > 0);
-            var synced = (dto.Metadata?.IsSynced == true || allHaveTimestamps) && dto.Lyrics.All(l => l.Start.HasValue);
+            var synced = dto.Metadata?.IsSynced == true || dto.Lyrics.All(l => l.Start.HasValue);
             var lang = "und"; // undetermined — Jellyfin doesn't expose language per lyric set
             var displayArtist = song.Artists.FirstOrDefault() ?? "";
             var displayTitle = song.Name ?? "";

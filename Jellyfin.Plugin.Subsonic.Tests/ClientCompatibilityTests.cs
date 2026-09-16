@@ -4,6 +4,7 @@ using System.Xml;
 using Jellyfin.Plugin.Subsonic.Controllers;
 using Jellyfin.Plugin.Subsonic.Response;
 using Xunit;
+using MediaBrowser.Model.Lyrics;
 
 namespace Jellyfin.Plugin.Subsonic.Tests;
 
@@ -271,4 +272,45 @@ public class ClientCompatibilityTests
         Assert.NotNull(songLyrics);
         Assert.Equal("1", songLyrics!["versions", ns]!.InnerText);
     }
+}
+
+/// <summary>
+/// A synchronized LRC may legitimately start at 0 ms.
+/// Amperfy requires synced=true for automatic lyric scrolling.
+/// </summary>
+[Fact]
+public void Amperfy_SyncedLyrics_ZeroStart_IsRecognizedAsSynced()
+{
+    var lyrics = new List<LyricLine>
+    {
+        new("First line", TimeSpan.Zero.Ticks),
+        new("Second line", TimeSpan.FromSeconds(2).Ticks),
+        new("Third line", TimeSpan.FromMilliseconds(3001).Ticks),
+    };
+
+    var synced = SubsonicController.AreLyricsSynced(
+        lyrics,
+        metadataIsSynced: null);
+
+    Assert.True(synced);
+}
+
+/// <summary>
+/// Lyrics without timestamps are unsynchronized and must not be
+/// treated as timed lyrics by Amperfy.
+/// </summary>
+[Fact]
+public void Amperfy_UnsyncedLyrics_WithoutStarts_IsNotSynced()
+{
+    var lyrics = new List<LyricLine>
+    {
+        new("First line"),
+        new("Second line"),
+    };
+
+    var synced = SubsonicController.AreLyricsSynced(
+        lyrics,
+        metadataIsSynced: null);
+
+    Assert.False(synced);
 }
