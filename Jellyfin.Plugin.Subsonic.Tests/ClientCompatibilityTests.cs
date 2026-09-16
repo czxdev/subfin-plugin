@@ -245,7 +245,8 @@ public class ClientCompatibilityTests
     }
 
     /// <summary>
-    /// getOpenSubsonicExtensions must include an extension named "songLyrics".
+    /// getOpenSubsonicExtensions must advertise the "songLyrics" extension
+    /// using the OpenSubsonic/Navidrome-compatible XML representation.
     /// Tempus only routes to getLyricsBySongId when songLyrics appears in this response.
     /// </summary>
     [Fact]
@@ -254,17 +255,20 @@ public class ClientCompatibilityTests
         var xml = XmlBuilder.OpenSubsonicExtensions();
         var doc = Parse(xml);
         var ns = "http://subsonic.org/restapi";
-        var extensions = doc.DocumentElement!["openSubsonicExtensions", ns]!;
 
-        var found = false;
-        foreach (XmlElement ext in extensions.ChildNodes)
+        var extensions = doc.GetElementsByTagName("openSubsonicExtensions", ns);
+
+        XmlElement? songLyrics = null;
+        foreach (XmlElement ext in extensions)
         {
             if (ext.GetAttribute("name") == "songLyrics")
             {
-                found = true;
+                songLyrics = ext;
                 break;
             }
         }
-        Assert.True(found, "openSubsonicExtensions must include an extension named 'songLyrics'");
+
+        Assert.NotNull(songLyrics);
+        Assert.Equal("1", songLyrics!["versions", ns]!.InnerText);
     }
 }

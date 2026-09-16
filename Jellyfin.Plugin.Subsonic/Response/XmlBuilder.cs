@@ -157,20 +157,25 @@ public static class XmlBuilder
 
     public static string OpenSubsonicExtensions() => OkEnvelope(w =>
     {
-        w.WriteStartElement("openSubsonicExtensions", Ns);
-        foreach (var (name, versions) in new[] { ("template", new[] { 1 }), ("transcodeOffset", new[] { 1 }), ("songLyrics", new[] { 1 }) })
+        foreach (var (name, versions) in new[]
         {
-            w.WriteStartElement("extension", Ns);
+            ("transcodeOffset", new[] { 1 }),
+            ("songLyrics", new[] { 1 })
+        })
+        {
+            w.WriteStartElement("openSubsonicExtensions", Ns);
             w.WriteAttributeString("name", name);
+
             foreach (var v in versions)
             {
-                w.WriteStartElement("version", Ns);
-                w.WriteAttributeString("value", v.ToString(CultureInfo.InvariantCulture));
-                w.WriteEndElement();
+                w.WriteElementString(
+                    "versions",
+                    Ns,
+                    v.ToString(CultureInfo.InvariantCulture));
             }
+
             w.WriteEndElement();
         }
-        w.WriteEndElement();
     });
 
     // ── Music Folders ────────────────────────────────────────────────────────
